@@ -26,7 +26,7 @@ for model in tqdm(classification_models):
         ('low_variance', VarianceThreshold(threshold=0.01)),  # Удаление малополезных фич
         ('scaler', RobustScaler()),  # Масштабирование
         ('feature_selection', SelectKBest(score_func=f_classif, k=20)),
-        ('pca', PCA()),  # PCA до 95% дисперсии
+        ('pca', PCA()),  # PCA уменьшаем размерность
         ('clf', model.model)  # Модель
     ])
     regressor_name = type(pipeline.named_steps['clf']).__name__
