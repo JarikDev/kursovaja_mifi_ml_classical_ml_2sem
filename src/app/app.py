@@ -1,9 +1,8 @@
 import warnings
 
-import numpy as np
 from sklearn.decomposition import PCA
 from sklearn.exceptions import ConvergenceWarning
-from sklearn.feature_selection import VarianceThreshold, f_classif, SelectKBest,f_regression ,mutual_info_regression
+from sklearn.feature_selection import VarianceThreshold, f_classif, SelectKBest, f_regression
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import RobustScaler
@@ -13,77 +12,87 @@ from src.ml.utils.processors import RegressionProcessor, regression_models
 from src.ml.utils.processors import regression_tasks, classification_tasks, classification_models, \
     ClassificationProcessor
 
-# Подавляем основные предупреждения
+# Подавляем все предупреждения, чтобы избежать лишних сообщений в консоли
 warnings.filterwarnings('ignore')
-# warnings.filterwarnings('ignore', category=np.VisibleDeprecationWarning)  # если нужно
-warnings.filterwarnings("ignore", category=RuntimeWarning)  # numpy warnings
-warnings.filterwarnings("ignore", category=ConvergenceWarning)  # sklearn warnings
+warnings.filterwarnings("ignore", category=RuntimeWarning)  # подавляем предупреждения от numpy
+warnings.filterwarnings("ignore", category=ConvergenceWarning)  # подавляем предупреждения от sklearn
 
+# Указываем путь к данным
 data_path = '../ml/data/kursovik_data.csv'
 
+
 def run_regression():
+    """
+    Функция для запуска всех моделей для задачи регрессии.
+    Для каждой задачи регрессии и каждой модели создаётся пайплайн и запускается процесс.
+    """
     for task in regression_tasks:
-        # Запускаем обработку всех моделей для решения задачи регрессии
+        # Проходим по всем моделям для каждой задачи регрессии
         for model in tqdm(regression_models):
-            # Строим пайплайн
+            # Создание пайплайна для обработки данных
             pipeline = Pipeline([
-                ('imputer', SimpleImputer(strategy='median')),  # Заполнение пропусков
-                ('low_variance', VarianceThreshold(threshold=0.01)),
-                ('scaler', RobustScaler()),  # Масштабирование
-                # ('poly', PolynomialFeatures(degree=2, include_bias=False)),
-                ('feature_selection', SelectKBest(score_func=f_regression , k=20)),
-                # ('feature_selection', SelectKBest(score_func=mutual_info_regression , k=20)),
-                # ('corr_filter', CorrelationFilter(threshold=0.95)),  # Удаление коррелированных фич
-                ('pca', PCA()),  # PCA уменьшаем размерность
-                ('regressor', model.model)
+                ('imputer', SimpleImputer(strategy='median')),  # Заполнение пропусков медианой
+                ('low_variance', VarianceThreshold(threshold=0.01)),  # Убираем признаки с низкой дисперсией
+                ('scaler', RobustScaler()),  # Масштабируем данные с использованием RobustScaler
+                ('feature_selection', SelectKBest(score_func=f_regression, k=20)),  # Выбираем лучшие 20 признаков
+                ('pca', PCA()),  # Уменьшаем размерность с помощью PCA
+                ('regressor', model.model)  # Применяем выбранную модель регрессора
             ])
-            regressor_name = type(pipeline.named_steps['regressor']).__name__
+            regressor_name = type(pipeline.named_steps['regressor']).__name__  # Получаем имя модели
             print(f'\nЗапускаем регрессию для: {task.y_col}, модель: {regressor_name}\n')
-            # запускаем минифреймворк
-            RegressionProcessor(data_path,
-                                task.y_col,
-                                # simple_preprocess_df,
-                                task.preprocessor,
-                                # feature_engineering_df_preprocessor,
-                                model.param_grid,
-                                pipeline).run()
+            # Запуск процесса регрессии для текущей модели и задачи
+            RegressionProcessor(data_path="../data/kursovik_data.csv",
+                                y_col=task.y_col,
+                                data_preprocessing_fun=task.preprocessor,
+                                param_grid=model.param_grid,
+                                pipeline=pipeline).run()
+
 
 def run_classification():
+    """
+    Функция для запуска всех моделей для задачи классификации.
+    Для каждой задачи классификации и каждой модели создаётся пайплайн и запускается процесс.
+    """
     for task in classification_tasks:
-        # Запускаем обработку всех моделей для решения задачи классификации
+        # Проходим по всем моделям для каждой задачи классификации
         for model in tqdm(classification_models):
-            # Строим пайплайн
+            # Создание пайплайна для обработки данных
             pipeline = Pipeline([
-                ('imputer', SimpleImputer(strategy='median')),  # Заполнение пропусков
-                ('low_variance', VarianceThreshold(threshold=0.01)),  # Удаление малополезных фич
-                ('scaler', RobustScaler()),  # Масштабирование
-                # ('poly', PolynomialFeatures(degree=2, include_bias=False)),
-                ('feature_selection', SelectKBest(score_func=f_classif, k=20)),
-                # ('corr_filter', CorrelationFilter(threshold=0.95)),  # Удаление коррелированных фич
-                ('pca', PCA()),  # PCA до 95% дисперсии
-                ('clf', model.model)  # Модель
+                ('imputer', SimpleImputer(strategy='median')),  # Заполнение пропусков медианой
+                ('low_variance', VarianceThreshold(threshold=0.01)),  # Убираем признаки с низкой дисперсией
+                ('scaler', RobustScaler()),  # Масштабируем данные с использованием RobustScaler
+                ('feature_selection', SelectKBest(score_func=f_classif, k=20)),  # Выбираем лучшие 20 признаков
+                ('pca', PCA()),  # Уменьшаем размерность с помощью PCA
+                ('clf', model.model)  # Применяем выбранную модель классификатора
             ])
-            regressor_name = type(pipeline.named_steps['clf']).__name__
-            print(f'\nЗапускаем классификацию для: {task.y_col}, модель: {regressor_name}\n')
-            # запускаем минифреймворк
-            ClassificationProcessor(data_path,
-                                    task.y_col,
-                                    task.preprocessor,
-                                    model.param_grid,
-                                    pipeline,
-                                    task.split_criterion_func).run()
+            classifier_name = type(pipeline.named_steps['clf']).__name__  # Получаем имя модели
+            print(f'\nЗапускаем классификацию для: {task.y_col}, модель: {classifier_name}\n')
+            # Запуск процесса классификации для текущей модели и задачи
+            ClassificationProcessor(data_path="../data/kursovik_data.csv",
+                                    y_col=task.y_col,
+                                    data_preprocessing_fun=task.preprocessor,
+                                    param_grid=model.param_grid,
+                                    pipeline=pipeline,
+                                    split_criterion_func=lambda data, column: data[column].median()).run()
+
+
 def run_app():
-    print('Что делаем ? 1 - регрессию, 2 - кластеризацию, 3 - всё.')
-    mode = input()
+    """
+    Основная функция приложения, которая предлагает пользователю выбрать режим работы: регрессия, классификация или всё.
+    """
+    print('Что делаем ? 1 - регрессию, 2 - кластеризацию, 3 - всё.')  # Выводим меню
+    mode = input()  # Получаем выбор пользователя
     match mode:
         case '1':
-            run_regression()
+            run_regression()  # Запуск режима регрессии
         case '2':
-            run_classification()
+            run_classification()  # Запуск режима классификации
         case '3':
-            run_regression()
+            run_regression()  # Запуск обоих режимов
             run_classification()
         case _:
-            raise KeyError(f"Не знаю что это ... {mode}")
+            raise KeyError(f"Не знаю что это ... {mode}")  # Ошибка при неправильном выборе
 
+
+# Запуск приложения
 run_app()

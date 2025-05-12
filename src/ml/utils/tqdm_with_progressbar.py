@@ -3,23 +3,28 @@ from tqdm import tqdm
 
 
 class TQDMWrapper(BaseEstimator, TransformerMixin):
+    # Обёртка для преобразователей sklearn с визуализацией прогресса через tqdm.
+
     def __init__(self, transformer=None, desc="Step"):
         self.transformer = transformer
         self.desc = desc
 
     def fit(self, X, y=None):
+        # Обучение преобразователя с визуализацией прогресса.
         with tqdm(total=1, desc=f"{self.desc} - fit") as pbar:
             self.transformer.fit(X, y)
             pbar.update()
         return self
 
     def transform(self, X):
+        # Преобразование данных с визуализацией прогресса.
         with tqdm(total=1, desc=f"{self.desc} - transform") as pbar:
             X_t = self.transformer.transform(X)
             pbar.update()
         return X_t
 
     def get_params(self, deep=True):
+        # Получение параметров преобразователя.
         out = dict(transformer=self.transformer, desc=self.desc)
         if deep and hasattr(self.transformer, 'get_params'):
             for key, value in self.transformer.get_params(deep=True).items():
@@ -27,6 +32,7 @@ class TQDMWrapper(BaseEstimator, TransformerMixin):
         return out
 
     def set_params(self, **params):
+        # Установка параметров для обёртки и её преобразователя.
         transformer_params = {}
         for key, value in params.items():
             if key.startswith("transformer__"):

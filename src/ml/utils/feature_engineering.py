@@ -1,15 +1,16 @@
 from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.decomposition import PCA
 import numpy as np
 import pandas as pd
-from sklearn.decomposition import PCA
 
-# Кастомный фильтр коррелированных признаков
+# Кастомный фильтр для удаления сильно коррелированных признаков
 class CorrelationFilter(BaseEstimator, TransformerMixin):
     def __init__(self, threshold=0.95):
-        self.threshold = threshold
-        self.to_drop_ = []
+        self.threshold = threshold  # Порог корреляции
+        self.to_drop_ = []  # Список признаков для удаления
 
     def fit(self, X, y=None):
+        # Вычисляем корреляционную матрицу и определяем признаки, превышающие порог
         if isinstance(X, pd.DataFrame):
             corr_matrix = X.corr().abs()
             upper = np.triu(np.ones(corr_matrix.shape), k=1).astype(bool)
@@ -18,33 +19,55 @@ class CorrelationFilter(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X):
+        # Удаляем выбранные признаки
         return pd.DataFrame(X).drop(columns=self.to_drop_, errors='ignore')
 
-
+# Заполняем пропущенные значения медианой
 def remove_and_fill_nans(data):
     return data.fillna(data.median())
 
+# Пустой препроцессинг (для совместимости)
 def simple_preprocess_df(data):
-    # data = feature_engineer(data)
-    # data = remove_zeros_and_fill_remained_with_mean(data, threshold=30)
     return data
 
-def preprocess_df(data):
+# Основной препроцессинг датафрейма с фильтрацией выбросов и преобразованиями
+def preprocess_df(df):
+    df = feature_engineering_df_preprocessor(df)
+    if "Unnamed: 0" in df.columns:
+        df.drop(columns=["Unnamed: 0"], inplace=True)
+    df = df.dropna()
+    df.rename(columns={'CC50, mM': 'CC50'}, inplace=True)
+    df.rename(columns={'IC50, mM': 'IC50'}, inplace=True)
+    df = df[df['IC50'] < 1001]  # Фильтрация по IC50
+    df['SI'] = df['CC50'] / df['IC50']  # Расчёт SI
+    df = df[df['SI'] < 1001]  # Фильтрация по SI
+    return df
+
+# Более строгая фильтрация выбросов
+def strict_delete_outliners_preprocess_df(data):
     data = feature_engineering_df_preprocessor(data)
-    # data = remove_zeros_and_fill_remained_with_mean(data, threshold=30)
+    if "Unnamed: 0" in data.columns:
+        data.drop(columns=["Unnamed: 0"], inplace=True)
+    data = data.dropna()
+    data.rename(columns={'CC50, mM': 'CC50'}, inplace=True)
+    data.rename(columns={'IC50, mM': 'IC50'}, inplace=True)
+    data = data[data['IC50'] < 400]
+    data = data[data['CC50'] < 1500]
+    data['SI'] = data['CC50'] / data['IC50']
+    data = data[data['SI'] < 60]
     return data
 
-
+# Расширенный препроцессинг: извлечение новых признаков
 def feature_engineering_df_preprocessor(df):
     df = df.copy()
 
-    # 1. Логарифмические и корневые преобразования признаков
+    # Логарифмы и корни признаков
     for col in ['MolWt', 'LabuteASA', 'TPSA', 'NumRotatableBonds']:
         if col in df.columns:
             df[f'log_{col}'] = np.log1p(df[col])
             df[f'sqrt_{col}'] = np.sqrt(df[col])
 
-    # 2. Отношения и взаимодействия
+    # Отношения между признаками
     if all(c in df.columns for c in ['MolLogP', 'MolWt']):
         df['LogP_per_weight'] = df['MolLogP'] / (df['MolWt'] + 1)
     if all(c in df.columns for c in ['NumHDonors', 'NumHAcceptors']):
@@ -52,7 +75,7 @@ def feature_engineering_df_preprocessor(df):
     if all(c in df.columns for c in ['RingCount', 'HeavyAtomCount']):
         df['Ring_density'] = df['RingCount'] / (df['HeavyAtomCount'] + 1)
 
-    # 3. Суммы фрагментов (группировка fr_*)
+    # Суммарные признаки фрагментов
     nitro_cols = [c for c in df.columns if c in ['fr_nitro', 'fr_nitro_arom', 'fr_nitro_arom_nonortho']]
     if nitro_cols:
         df['fr_nitro_total'] = df[nitro_cols].sum(axis=1)
@@ -65,7 +88,7 @@ def feature_engineering_df_preprocessor(df):
     if fr_cols:
         df['fr_total'] = df[fr_cols].sum(axis=1)
 
-    # 4. PCA по PEOE_VSA* (если есть)
+    # PCA по блокам PEOE_VSA (если хватает признаков)
     vsa_cols = [c for c in df.columns if c.startswith('PEOE_VSA')]
     if len(vsa_cols) >= 3:
         pca = PCA(n_components=2)
@@ -75,16 +98,14 @@ def feature_engineering_df_preprocessor(df):
 
     return df
 
-
-import numpy as np
-import pandas as pd
-
+# Логарифмирование заданных признаков
 def add_log_features(df, cols):
     for col in cols:
         if col in df.columns:
             df[f'log_{col}'] = np.log1p(df[col])
     return df
 
+# Взаимодействие признаков
 def add_interaction_features(df):
     if "MolWt" in df.columns and "TPSA" in df.columns:
         df["MolWt_x_TPSA"] = df["MolWt"] * df["TPSA"]
@@ -92,12 +113,14 @@ def add_interaction_features(df):
         df["LogP_per_weight"] = df["MolLogP"] / (df["MolWt"] + 1e-6)
     return df
 
+# Нормализация по массе
 def add_mass_normalized_features(df):
     if "MolWt" in df.columns:
         df["NumRings_per_weight"] = df["RingCount"] / (df["MolWt"] + 1e-6)
         df["NumHAcceptors_per_weight"] = df["NumHAcceptors"] / (df["MolWt"] + 1e-6)
     return df
 
+# Агрегаты по фрагментам
 def add_fragment_aggregates(df):
     df['fr_total'] = df[[c for c in df.columns if c.startswith('fr_')]].sum(axis=1)
     df['fr_nitro_total'] = df[[c for c in df.columns if c in ['fr_nitro', 'fr_nitro_arom', 'fr_nitro_arom_nonortho']]].sum(axis=1)
@@ -106,6 +129,7 @@ def add_fragment_aggregates(df):
     df['fr_halogen_total'] = df[[c for c in df.columns if 'halogen' in c]].sum(axis=1)
     return df
 
+# Сводная статистика по группам признаков
 def add_block_stats(df, prefix):
     block_cols = [col for col in df.columns if col.startswith(prefix)]
     if block_cols:
@@ -113,202 +137,216 @@ def add_block_stats(df, prefix):
         df[f"{prefix}_std"] = df[block_cols].std(axis=1)
     return df
 
+# Бинаризация фрагментов (наличие/отсутствие)
 def binarize_fragments(df):
     for col in [c for c in df.columns if c.startswith("fr_")]:
         df[f"{col}_bin"] = (df[col] > 0).astype(int)
     return df
 
-
-
-
-
+# Ниже идут функции препроцессинга для разных задач — регрессия и классификация IC50, CC50, SI
 def preprocess_ic50_regression(df):
-    df = df.copy()
-    df['IC50'] = np.log1p(df['IC50'])
+    """
+    Препроцессинг данных для задачи регрессии по IC50:
+    1. Логарифмирование значения IC50 (чтобы нормализовать распределение).
+    2. Добавление логарифмических и корневых преобразований для выбранных признаков.
+    3. Добавление интерактивных признаков (например, произведения молекулярных характеристик).
+    4. Нормализация признаков с учётом массы.
+    5. Агрегирование фрагментов молекул по признакам.
+    6. Добавление статистики для блоков признаков, связанных с PEOE_VSA.
 
+    :param df: DataFrame с данными
+    :return: DataFrame с добавленными и преобразованными признаками
+    """
+    df = df.copy()  # Создаём копию данных, чтобы не изменять оригинал
+    df['IC50'] = np.log1p(df['IC50'])  # Логарифмируем IC50 (с добавлением 1, чтобы избежать логарифмирования 0)
+
+    # Добавляем логарифмические и корневые признаки для заданных столбцов
     df = add_log_features(df, ['MolWt', 'TPSA', 'LabuteASA', 'MolLogP'])
+
+    # Добавляем интерактивные признаки (например, произведения молекулярных свойств)
     df = add_interaction_features(df)
+
+    # Добавляем признаки, нормализованные по массе
     df = add_mass_normalized_features(df)
+
+    # Добавляем агрегации по фрагментам
     df = add_fragment_aggregates(df)
+
+    # Добавляем статистику для блока признаков "PEOE_VSA"
     df = add_block_stats(df, "PEOE_VSA")
-    return df
+
+    return df  # Возвращаем обработанный DataFrame
+
 
 def preprocess_cc50_regression(df):
-    df = df.copy()
-    df['CC50'] = np.log1p(df['CC50'])
+    """
+    Препроцессинг данных для задачи регрессии по CC50:
+    1. Логарифмирование значения CC50 (чтобы нормализовать распределение).
+    2. Добавление логарифмических и корневых преобразований для выбранных признаков.
+    3. Добавление интерактивных признаков (например, произведения молекулярных характеристик).
+    4. Нормализация признаков с учётом массы.
+    5. Агрегирование фрагментов молекул по признакам.
+    6. Добавление статистики для блоков признаков, связанных с SlogP_VSA.
 
+    :param df: DataFrame с данными
+    :return: DataFrame с добавленными и преобразованными признаками
+    """
+    df = df.copy()  # Создаём копию данных, чтобы не изменять оригинал
+    df['CC50'] = np.log1p(df['CC50'])  # Логарифмируем CC50 (с добавлением 1, чтобы избежать логарифмирования 0)
+
+    # Добавляем логарифмические и корневые признаки для заданных столбцов
     df = add_log_features(df, ['MolWt', 'TPSA', 'LabuteASA', 'MolLogP'])
+
+    # Добавляем интерактивные признаки (например, произведения молекулярных свойств)
     df = add_interaction_features(df)
+
+    # Добавляем признаки, нормализованные по массе
     df = add_mass_normalized_features(df)
+
+    # Добавляем агрегации по фрагментам
     df = add_fragment_aggregates(df)
+
+    # Добавляем статистику для блока признаков "SlogP_VSA"
     df = add_block_stats(df, "SlogP_VSA")
-    return df
+
+    return df  # Возвращаем обработанный DataFrame
+
 
 def preprocess_si_regression(df):
-    df = df.copy()
+    """
+    Препроцессинг данных для задачи регрессии по SI:
+    1. Вычисление нового признака SI как отношение CC50 к IC50.
+    2. Логарифмирование значения SI (чтобы нормализовать распределение).
+    3. Добавление логарифмических и корневых преобразований для выбранных признаков.
+    4. Добавление интерактивных признаков (например, произведения молекулярных характеристик).
+    5. Агрегирование фрагментов молекул по признакам.
+    6. Добавление статистики для блоков признаков, связанных с EState_VSA.
+    7. Нормализация признаков с учётом массы.
 
-    # Пересчёт SI вручную и логарифмирование
-    df['SI'] = df['CC50'] / (df['IC50'] + 1e-8)
-    df['SI'] = np.log1p(df['SI'])  # используем ТОЛЬКО этот признак
+    :param df: DataFrame с данными
+    :return: DataFrame с добавленными и преобразованными признаками
+    """
+    df = df.copy()  # Создаём копию данных, чтобы не изменять оригинал
+    df['SI'] = df['CC50'] / (df['IC50'] + 1e-8)  # Вычисляем SI (с небольшим сдвигом для предотвращения деления на ноль)
+    df['SI'] = np.log1p(df['SI'])  # Логарифмируем SI
 
-    # Логарифмирование ключевых признаков
+    # Добавляем логарифмические и корневые признаки для заданных столбцов
     df = add_log_features(df, ['MolWt', 'TPSA', 'MolLogP', 'NumRotatableBonds'])
 
-    # Интерактивные признаки (например, произведения и соотношения)
+    # Добавляем интерактивные признаки (например, произведения молекулярных свойств)
     df = add_interaction_features(df)
 
-    # Агрегаты по фрагментам
+    # Добавляем агрегации по фрагментам
     df = add_fragment_aggregates(df)
 
-    # Статистика по блокам признаков
+    # Добавляем статистику для блока признаков "EState_VSA"
     df = add_block_stats(df, "EState_VSA")
 
-    # Нормализация по массе (например, для интерпретируемости и масштабирования)
+    # Добавляем признаки, нормализованные по массе
     df = add_mass_normalized_features(df)
 
-
-    return df
+    return df  # Возвращаем обработанный DataFrame
 
 
 def preprocess_ic50_classification(df):
-    df = df.copy()
-    df = add_log_features(df, ['MolWt', 'TPSA', 'MolLogP'])
+    """
+    Препроцессинг данных для задачи классификации по IC50:
+    1. Добавление логарифмических преобразований для выбранных признаков.
+    2. Добавление интерактивных признаков (например, произведения молекулярных характеристик).
+    3. Добавление агрегации по фрагментам молекул.
+    4. Бинаризация фрагментов молекул (преобразование признаков в бинарные значения).
+
+    :param df: DataFrame с данными
+    :return: DataFrame с добавленными и преобразованными признаками
+    """
+    df = df.copy()  # Создаём копию данных, чтобы не изменять оригинал
+    df = add_log_features(df, ['MolWt', 'TPSA', 'MolLogP'])  # Добавляем логарифмические признаки
+
+    # Добавляем интерактивные признаки (например, произведения молекулярных свойств)
     df = add_interaction_features(df)
+
+    # Добавляем агрегации по фрагментам
     df = add_fragment_aggregates(df)
+
+    # Бинаризация фрагментов молекул (например, преобразуем количество в бинарные признаки)
     df = binarize_fragments(df)
-    return df
+
+    return df  # Возвращаем обработанный DataFrame
+
 
 def preprocess_cc50_classification(df):
-    df = df.copy()
-    df = add_log_features(df, ['MolWt', 'TPSA', 'MolLogP'])
+    """
+    Препроцессинг данных для задачи классификации по CC50:
+    1. Добавление логарифмических преобразований для выбранных признаков.
+    2. Добавление интерактивных признаков (например, произведения молекулярных характеристик).
+    3. Добавление агрегации по фрагментам молекул.
+    4. Бинаризация фрагментов молекул (преобразование признаков в бинарные значения).
+
+    :param df: DataFrame с данными
+    :return: DataFrame с добавленными и преобразованными признаками
+    """
+    df = df.copy()  # Создаём копию данных, чтобы не изменять оригинал
+    df = add_log_features(df, ['MolWt', 'TPSA', 'MolLogP'])  # Добавляем логарифмические признаки
+
+    # Добавляем интерактивные признаки (например, произведения молекулярных свойств)
     df = add_interaction_features(df)
+
+    # Добавляем агрегации по фрагментам
     df = add_fragment_aggregates(df)
+
+    # Бинаризация фрагментов молекул (например, преобразуем количество в бинарные признаки)
     df = binarize_fragments(df)
-    return df
+
+    return df  # Возвращаем обработанный DataFrame
+
 
 def preprocess_si_median_classification(df):
-    df = df.copy()
-    df = add_log_features(df, ['MolWt', 'TPSA', 'MolLogP'])
+    """
+    Препроцессинг данных для задачи классификации по SI, где целевой переменной является медиана SI:
+    1. Добавление логарифмических преобразований для выбранных признаков.
+    2. Добавление интерактивных признаков (например, произведения молекулярных характеристик).
+    3. Добавление агрегации по фрагментам молекул.
+    4. Добавление статистики для блоков признаков, связанных с PEOE_VSA.
+
+    :param df: DataFrame с данными
+    :return: DataFrame с добавленными и преобразованными признаками
+    """
+    df = df.copy()  # Создаём копию данных, чтобы не изменять оригинал
+    df = add_log_features(df, ['MolWt', 'TPSA', 'MolLogP'])  # Добавляем логарифмические признаки
+
+    # Добавляем интерактивные признаки (например, произведения молекулярных свойств)
     df = add_interaction_features(df)
+
+    # Добавляем агрегации по фрагментам
     df = add_fragment_aggregates(df)
+
+    # Добавляем статистику для блока признаков "PEOE_VSA"
     df = add_block_stats(df, "PEOE_VSA")
-    return df
+
+    return df  # Возвращаем обработанный DataFrame
+
 
 def preprocess_si_gt8_classification(df):
-    df = df.copy()
-    df = add_log_features(df, ['MolWt', 'TPSA', 'MolLogP'])
+    """
+    Препроцессинг данных для задачи классификации по SI, где целевая переменная больше 8:
+    1. Добавление логарифмических преобразований для выбранных признаков.
+    2. Добавление интерактивных признаков (например, произведения молекулярных характеристик).
+    3. Добавление агрегации по фрагментам молекул.
+    4. Добавление статистики для блоков признаков, связанных с SlogP_VSA.
+
+    :param df: DataFrame с данными
+    :return: DataFrame с добавленными и преобразованными признаками
+    """
+    df = df.copy()  # Создаём копию данных, чтобы не изменять оригинал
+    df = add_log_features(df, ['MolWt', 'TPSA', 'MolLogP'])  # Добавляем логарифмические признаки
+
+    # Добавляем интерактивные признаки (например, произведения молекулярных свойств)
     df = add_interaction_features(df)
+
+    # Добавляем агрегации по фрагментам
     df = add_fragment_aggregates(df)
+
+    # Добавляем статистику для блока признаков "SlogP_VSA"
     df = add_block_stats(df, "SlogP_VSA")
-    return df
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#
-#
-#
-# def preprocess_ic50_regression(df):
-#     df = df.copy()
-#     df['IC50'] = np.log1p(df['IC50'])
-#     for col in ['MolWt', 'TPSA', 'LabuteASA', 'MolLogP']:
-#         if col in df:
-#             df[f'log_{col}'] = np.log1p(df[col])
-#     return df
-#
-# def preprocess_cc50_regression(df):
-#     df = df.copy()
-#     df['CC50'] = np.log1p(df['CC50'])
-#     for col in ['MolWt', 'TPSA', 'LabuteASA', 'MolLogP']:
-#         if col in df:
-#             df[f'log_{col}'] = np.log1p(df[col])
-#     # Группы фрагментов
-#     df['fr_nitro_total'] = df[[c for c in df.columns if c in ['fr_nitro', 'fr_nitro_arom', 'fr_nitro_arom_nonortho']]].sum(axis=1)
-#     df['fr_amine_total'] = df[[c for c in df.columns if c in ['fr_NH0', 'fr_NH1', 'fr_NH2']]].sum(axis=1)
-#     return df
-#
-# def preprocess_si_regression(df):
-#     df = df.copy()
-#     df['SI'] = np.log1p(df['SI'])
-#     df['SI_ratio'] = df['CC50'] / (df['IC50'] + 1e-8)
-#     df['log_SI_ratio'] = np.log1p(df['SI_ratio'])
-#     for col in ['MolWt', 'TPSA', 'MolLogP', 'NumRotatableBonds']:
-#         if col in df:
-#             df[f'log_{col}'] = np.log1p(df[col])
-#     df['fr_total'] = df[[c for c in df.columns if c.startswith('fr_')]].sum(axis=1)
-#     return df
-#
-# def preprocess_si_regression_2(df):
-#     df = df.copy()
-#     df['SI'] = df['CC50'] / (df['IC50'] + 1e-8)
-#     df['SI'] = np.log1p(df['SI'])
-#     for col in ['MolWt', 'TPSA', 'MolLogP', 'NumRotatableBonds']:
-#         if col in df:
-#             df[f'log_{col}'] = np.log1p(df[col])
-#     df['fr_total'] = df[[c for c in df.columns if c.startswith('fr_')]].sum(axis=1)
-#     return df
-#
-# def preprocess_ic50_classification(df):
-#     df = df.copy()
-#     # df['IC50_bin'] = (df['IC50'] > df['IC50'].median()).astype(int)
-#     for col in ['MolWt', 'TPSA', 'MolLogP']:
-#         df[f'log_{col}'] = np.log1p(df[col])
-#     return df
-#
-# def preprocess_cc50_classification(df):
-#     df = df.copy()
-#     # df['CC50_bin'] = (df['CC50'] > df['CC50'].median()).astype(int)
-#     for col in ['MolWt', 'TPSA', 'MolLogP']:
-#         df[f'log_{col}'] = np.log1p(df[col])
-#     df['fr_nitro_total'] = df[[c for c in df.columns if c in ['fr_nitro', 'fr_nitro_arom']]].sum(axis=1)
-#     return df
-#
-# def preprocess_si_median_classification(df):
-#     df = df.copy()
-#     # df['SI_bin_median'] = (df['SI'] > df['SI'].median()).astype(int)
-#     for col in ['MolWt', 'TPSA', 'MolLogP']:
-#         df[f'log_{col}'] = np.log1p(df[col])
-#     df['fr_total'] = df[[c for c in df.columns if c.startswith('fr_')]].sum(axis=1)
-#     return df
-#
-# def preprocess_si_gt8_classification(df):
-#     df = df.copy()
-#     # df['SI_bin_8'] = (df['SI'] > 8).astype(int)
-#     for col in ['MolWt', 'TPSA', 'MolLogP']:
-#         df[f'log_{col}'] = np.log1p(df[col])
-#     df['fr_total'] = df[[c for c in df.columns if c.startswith('fr_')]].sum(axis=1)
-#     return df
+    return df  # Возвращаем обработанный DataFrame

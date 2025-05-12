@@ -2,6 +2,7 @@ import warnings
 from abc import ABC, abstractmethod
 from collections import namedtuple
 
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -18,120 +19,102 @@ from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.neighbors import KNeighborsRegressor, KNeighborsClassifier
 from sklearn.svm import SVR
 
+# Импортируем функции предобработки из модуля
 from src.ml.utils.feature_engineering import preprocess_cc50_classification, \
     preprocess_ic50_classification, preprocess_si_gt8_classification, preprocess_ic50_regression, \
-    preprocess_cc50_regression, preprocess_si_regression, preprocess_si_median_classification
+    preprocess_cc50_regression, preprocess_si_regression, preprocess_si_median_classification, preprocess_df
 
+# Отключаем предупреждения и используем Agg-бэкэнд для matplotlib
+matplotlib.use('Agg')
 warnings.filterwarnings('ignore')
-data_path_const = "./data/kursovik_data.csv"
-n_components = [2, 3, 4, 5, 7, 10, 0.95]
-feature_selection__k = [10, 20, 50, 'all']
 
+# Константы и гиперпараметры
+data_path_const = "./data/kursovik_data.csv"
+n_components = [2, 3, 4, 5, 7, 10, 0.95]  # Кол-во компонент PCA
+feature_selection__k = [10, 20, 50, 'all']  # Кол-во признаков после отбора
+
+# Структура для хранения модели и её параметров
 ModelHolder = namedtuple('ModelHolder', ['model', 'param_grid'])
 
-# создаём колелкцию моделей для регрессии и их гиперпараметров для перебора
+# Список моделей для регрессии с гиперпараметрами
 regression_models = [
-    # Вариант 1. Ridge
     ModelHolder(Ridge(), {
         'regressor__alpha': [0.01, 0.1, 1, 10, 100]
     }),
-    # Вариант 2. Lasso
     ModelHolder(Lasso(max_iter=10000), {
         'regressor__alpha': [0.001, 0.01, 0.1, 1]
     }),
-    # Вариант 3. ElasticNet
     ModelHolder(ElasticNet(max_iter=10000), {
         'regressor__alpha': [0.01, 0.1, 1],
         'regressor__l1_ratio': [0.2, 0.5, 0.8]
     }),
-    # Вариант 4. Support Vector Regression (SVR)
     ModelHolder(SVR(), {
         'regressor__C': [0.1, 1, 10],
         'regressor__epsilon': [0.01, 0.1, 0.5],
         'regressor__kernel': ['linear', 'rbf']
     }),
-    # Вариант 5. Random Forest Regressor
     ModelHolder(RandomForestRegressor(random_state=42), {
         'regressor__n_estimators': [50, 100],
         'regressor__max_depth': [5, 10, None]
     }),
-    # Вариант 6. Gradient Boosting Regressor
     ModelHolder(GradientBoostingRegressor(random_state=42), {
         'regressor__n_estimators': [100, 200],
         'regressor__learning_rate': [0.01, 0.1],
         'regressor__max_depth': [3, 5]
     }),
-    # Вариант 7. K-Nearest Neighbors Regression (KNN)
     ModelHolder(KNeighborsRegressor(), {
         'regressor__n_neighbors': [3, 5, 7],
         'regressor__weights': ['uniform', 'distance']
     })
 ]
 
-# создаём колелкцию моделей для классификации и их гиперпараметров для перебора
+# Список моделей для классификации с гиперпараметрами
 classification_models = [
-    # Вариант 1. Логистическая регрессия (LogisticRegression)
     ModelHolder(LogisticRegression(solver='liblinear'), {
-        'pca__n_components': n_components,  # Подберем количество компонент
+        'pca__n_components': n_components,
         'feature_selection__k': feature_selection__k,
         'clf__C': [0.01, 0.1, 1, 10],
         'clf__penalty': ['l1', 'l2']
     }),
-    # Вариант 2. K-ближайших соседей (KNeighborsClassifier)
     ModelHolder(KNeighborsClassifier(), {
-        'pca__n_components': n_components,  # Подберем количество компонент
+        'pca__n_components': n_components,
         'feature_selection__k': feature_selection__k,
         'clf__n_neighbors': [3, 5, 7, 9],
         'clf__weights': ['uniform', 'distance'],
-        'clf__p': [1, 2]  # 1=Manhattan, 2=Euclidean
+        'clf__p': [1, 2]
     }),
-    # Вариант 4. Случайный лес (RandomForestClassifier)
     ModelHolder(RandomForestClassifier(random_state=42), {
-        'pca__n_components': n_components,  # Подберем количество компонент
+        'pca__n_components': n_components,
         'feature_selection__k': feature_selection__k,
         'clf__n_estimators': [50, 100, 200],
         'clf__max_depth': [3, 5, None],
         'clf__min_samples_split': [2, 5, 10]
     }),
-    # Вариант 4. Экстра-деревья (ExtraTreesClassifier)
     ModelHolder(ExtraTreesClassifier(random_state=42), {
-        'pca__n_components': n_components,  # Подберем количество компонент
+        'pca__n_components': n_components,
         'feature_selection__k': feature_selection__k,
         'clf__n_estimators': [100, 200],
         'clf__max_depth': [None, 5, 10]
     }),
-    # Вариант 5. Градиентный бустинг (GradientBoostingClassifier)
     ModelHolder(GradientBoostingClassifier(random_state=42), {
-        'pca__n_components': n_components,  # Подберем количество компонент
+        'pca__n_components': n_components,
         'feature_selection__k': feature_selection__k,
         'clf__n_estimators': [100, 200],
         'clf__learning_rate': [0.01, 0.1],
         'clf__max_depth': [3, 5]
     }),
-    # Вариант 6. Метод опорных векторов (SVC) - очень медленно
-    # ModelHolder(SVC(), {
-    #     'pca__n_components': n_components,  # Подберем количество компонент
-    #     'clf__C': [0.1, 1, 10],
-    #     'clf__kernel': ['linear', 'rbf'],  # rbf is too slow
-    #     # 'clf__kernel': ['linear'],
-    #     'clf__gamma': ['scale', 'auto']
-    # })
+    # SVC закомментирован, так как слишком медленный для больших выборок
 ]
 
-
+# Интерфейс для всех обработчиков (регрессия, классификация)
 class ProcessorInterface(ABC):
-
     def __init__(self, data_path):
         self.data_path = data_path
 
     def load_data(self) -> DataFrame:
+        # Загрузка данных и предобработка
         data = pd.read_csv(self.data_path)
-        data.rename(columns={'CC50, mM': 'CC50'}, inplace=True)
-        data.rename(columns={'IC50, mM': 'IC50'}, inplace=True)
-        data = data[data['IC50'] < 1001]
-        data['SI'] = data['CC50'] / data['IC50']
-        data = data[data['SI'] < 1001]
-        return data
+        return preprocess_df(data)
 
     @abstractmethod
     def run(self):
@@ -141,55 +124,93 @@ class ProcessorInterface(ABC):
 class RegressionProcessor(ProcessorInterface):
     def __init__(self, data_path, y_col, data_preprocessing_fun, param_grid, pipeline):
         super().__init__(data_path)
-        self.data_path = data_path
-        self.y_col = y_col
-        self.data_preprocessing_fun = data_preprocessing_fun
-        self.param_grid = param_grid
-        self.pipeline = pipeline
+        self.data_path = data_path                  # Путь к CSV-файлу с данными
+        self.y_col = y_col                          # Название целевой переменной (IC50, CC50 или SI)
+        self.data_preprocessing_fun = data_preprocessing_fun  # Функция предобработки
+        self.param_grid = param_grid                # Словарь с параметрами для GridSearchCV
+        self.pipeline = pipeline                    # Pipeline для обработки и обучения модели
 
-    def train_test_split_for_reg(self, data, test_size) -> (str, str, str, str):
-        # колонки которые должны быть удалены
+    def train_test_split_for_reg(self, data, test_size):
+        # Удаляем лишние колонки и разделяем на X и y
         cols_to_delete = ['Unnamed: 0', 'SI', 'CC50', 'IC50']
         X = data.drop(columns=cols_to_delete, axis=1, errors='ignore')
         y = data[self.y_col]
-        # Разделим данные на обучающую и тестовую выборки
         return train_test_split(X, y, test_size=test_size, random_state=42)
 
     def regression_report(self, regressor_name, y_true, y_pred):
+        # Выводим основные метрики регрессии
         print(f"MAE модели {regressor_name}, для: {self.y_col}: {mean_absolute_error(y_true, y_pred):.4f}")
         print(f"MSE модели {regressor_name}, для: {self.y_col}: {mean_squared_error(y_true, y_pred):.4f}")
-        print(
-            f"RMSE модели {regressor_name}, для: {self.y_col}: {mean_squared_error(y_true, y_pred):.4f}")
+        print(f"RMSE модели {regressor_name}, для: {self.y_col}: {mean_squared_error(y_true, y_pred):.4f}")
         print(f"R2 модели {regressor_name}, для: {self.y_col}: {r2_score(y_true, y_pred):.4f}")
 
     def run(self):
-        # Загрузка данных
-        data: DataFrame = self.load_data()
-        # Предобработка данных
+        # Загружаем датасет с диска и применяем предварительную обработку
+        # Включает, например, очистку данных, отбор признаков, нормализацию и т.д.
+        data = self.load_data()
         data = self.data_preprocessing_fun(data)
-        # Разделим данные на обучающую и тестовую выборки
+
+        # Делим данные на обучающую и тестовую выборки
+        # Выделяем целевую переменную и признаки, исключая ненужные колонки
         X_train, X_test, y_train, y_test = self.train_test_split_for_reg(data, 0.3)
-        # подбираем гиперпараметры с GridSearchCV
+
+        # Инициализируем GridSearchCV для подбора наилучших гиперпараметров модели
+        # Используем 5-кратную кросс-валидацию и метрику R²
         grid = GridSearchCV(self.pipeline, self.param_grid, cv=5, scoring='r2', n_jobs=-1)
         grid.fit(X_train, y_train)
 
-        # Лучшая модель
+        # Определяем имя используемой модели из пайплайна
         regressor_name = type(self.pipeline.named_steps['regressor']).__name__
         print(f"Лучшие параметры для: {regressor_name}")
         print(grid.best_params_)
 
-        # Предсказание
+        # Получаем предсказания на тестовой выборке
         y_pred = grid.predict(X_test)
 
+        # Выводим метрики качества регрессии: MAE, MSE, RMSE, R²
         print(f"Отчёт по регрессии модели {regressor_name}, для: {self.y_col}")
-        # выводим статистику полученной модели и регрессии
         self.regression_report(regressor_name, y_test, y_pred)
-        # Визуализируем предсказание против реальных значений
-        self.plot_predictions_vs_actual_values(regressor_name, y_test, y_pred)
-        self.plot_residuals(regressor_name, y_test, y_pred)
-        self.plot_errors_histogram(regressor_name, y_test, y_pred)
+
+        # Визуализируем поведение модели на тестовой выборке:
+        # распределение ошибок, остатки, сравнение предсказаний и фактических значений
+        self.plot_regression_diagnostics(regressor_name, y_test, y_pred)
+
+    def plot_regression_diagnostics(self, regressor_name, y_test, y_pred):
+        # Полный набор графиков диагностики
+        residuals = y_test - y_pred
+        fig, axes = plt.subplots(3, 1, figsize=(10, 15))
+        fig.suptitle(f'Диагностика модели: {regressor_name} для {self.y_col}', fontsize=14)
+
+        # Гистограмма ошибок
+        sns.histplot(residuals, bins=30, kde=True, ax=axes[0])
+        axes[0].set_title('Распределение ошибок')
+        axes[0].set_xlabel('Остатки')
+        axes[0].grid(True)
+
+        # Остатки vs Предсказания
+        sns.scatterplot(x=y_pred, y=residuals, alpha=0.6, ax=axes[1])
+        axes[1].axhline(0, color='red', linestyle='--')
+        axes[1].set_xlabel('Предсказанные значения')
+        axes[1].set_ylabel('Остатки')
+        axes[1].set_title('Остатки vs Предсказания')
+        axes[1].grid(True)
+
+        # Предсказания vs Фактические
+        sns.scatterplot(x=y_test, y=y_pred, alpha=0.6, ax=axes[2])
+        min_val, max_val = min(y_test.min(), y_pred.min()), max(y_test.max(), y_pred.max())
+        axes[2].plot([min_val, max_val], [min_val, max_val], 'r--')
+        axes[2].set_xlabel('Фактические значения')
+        axes[2].set_ylabel('Предсказанные значения')
+        axes[2].set_title('Факт vs Предсказание')
+        axes[2].grid(True)
+
+        plt.tight_layout(rect=[0, 0, 1, 0.95])
+        filename = f'diagnostics_{regressor_name}_{self.y_col}.png'
+        plt.savefig(filename)
+        plt.close()
 
     def plot_errors_histogram(self, regressor_name, y_test, y_pred):
+        # Отдельный график: распределение ошибок
         residuals = y_test - y_pred
         plt.figure(figsize=(6, 4))
         sns.histplot(residuals, bins=30, kde=True)
@@ -198,9 +219,9 @@ class RegressionProcessor(ProcessorInterface):
         plt.grid(True)
         plt.tight_layout()
         plt.savefig(f'pic_{regressor_name}_{self.y_col}_residual_distribution.png')
-        # plt.show()
 
     def plot_residuals(self, regressor_name, y_test, y_pred):
+        # Остатки по предсказанным значениям
         residuals = y_test - y_pred
         plt.figure(figsize=(7, 4))
         sns.scatterplot(x=y_pred, y=residuals, alpha=0.6)
@@ -211,10 +232,9 @@ class RegressionProcessor(ProcessorInterface):
         plt.grid(True)
         plt.tight_layout()
         plt.savefig(f'pic_{regressor_name}_{self.y_col}_residuals.png')
-        # plt.show()
 
     def plot_predictions_vs_actual_values(self, regressor_name, y_test, y_pred):
-        # Plot predictions vs actual values
+        # Факт против предсказания
         plt.figure(figsize=(6, 6))
         sns.scatterplot(x=y_test, y=y_pred, alpha=0.6)
         plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--')
@@ -224,29 +244,31 @@ class RegressionProcessor(ProcessorInterface):
         plt.grid(True)
         plt.tight_layout()
         plt.savefig(f"pic_{regressor_name}_{self.y_col}_regression.png")
-        # plt.show()
+
 
 
 class ClassificationProcessor(ProcessorInterface):
     def __init__(self, data_path, y_col, data_preprocessing_fun, param_grid, pipeline, split_criterion_func):
+        # Инициализация параметров для обработки задач классификации
         super().__init__(data_path)
         self.data_path = data_path
-        self.y_col = y_col
-        self.data_preprocessing_fun = data_preprocessing_fun
-        self.param_grid = param_grid
-        self.pipeline = pipeline
-        self.split_criterion_func = split_criterion_func
+        self.y_col = y_col  # Целевая переменная
+        self.data_preprocessing_fun = data_preprocessing_fun  # Функция предобработки данных
+        self.param_grid = param_grid  # Сетка гиперпараметров для GridSearch
+        self.pipeline = pipeline  # Pipeline модели
+        self.split_criterion_func = split_criterion_func  # Критерий разбиения классов
 
-    def train_test_split_for_clusterization(self, data, test_size) -> (
-            str, str, str, str):
+    def train_test_split_for_clusterization(self, data, test_size) -> (str, str, str, str):
+        # Удаление ненужных колонок и деление на X/y
         to_delete = ['Unnamed: 0', 'SI', 'CC50', 'IC50', 'target']
         X = data.drop(columns=to_delete, axis=1, errors='ignore')
         y = data['target']
+        # Разделение данных на train/test
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
         return X.columns, X_train, X_test, y_train, y_test
 
     def plot_predictions_vs_actual_values(self, regressor_name, y_test, y_pred):
-        # Plot predictions vs actual values
+        # Визуализация предсказаний против фактических значений
         plt.figure(figsize=(6, 6))
         sns.scatterplot(x=y_test, y=y_pred, alpha=0.6)
         plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--')
@@ -256,24 +278,19 @@ class ClassificationProcessor(ProcessorInterface):
         plt.grid(True)
         plt.tight_layout()
         plt.savefig(f"pic_classification_{regressor_name}_{self.y_col}")
-        # plt.show()
 
     def visualize_confusion_matrix(self, classifier_name, model, X_test, y_test):
-        # Матрица ошибок
+        # Построение матрицы ошибок
         ConfusionMatrixDisplay.from_estimator(model, X_test, y_test, cmap='Blues')
         plt.title(f'Confusion Matrix для {classifier_name} {self.y_col}')
         plt.savefig(f'pic_Confusion_Matrix_for_{classifier_name}_{self.y_col}')
-        # plt.show()
 
     def visualize_pr_curve(self, classifier_name, model, X_test, y_test):
-        # Предсказанные вероятности (для положительного класса)
-        y_proba = model.predict_proba(X_test)[:, 1]  # или pipeline.predict_proba(X_test)[:, 1]
-
-        # Вычисляем precision и recall
-        precision, recall, thresholds = precision_recall_curve(y_test, y_proba)
+        # Построение PR-кривой
+        y_proba = model.predict_proba(X_test)[:, 1]
+        precision, recall, _ = precision_recall_curve(y_test, y_proba)
         avg_prec = average_precision_score(y_test, y_proba)
 
-        # Строим график
         plt.figure(figsize=(6, 5))
         plt.plot(recall, precision, label=f'PR curve (AP = {avg_prec:.2f})')
         plt.xlabel('Recall')
@@ -283,182 +300,198 @@ class ClassificationProcessor(ProcessorInterface):
         plt.legend()
         plt.tight_layout()
         plt.savefig(f"pic_Precision_Recall_Curve_{classifier_name}_{self.y_col}")
-        # plt.show()
 
     def visualize_roc_curve(self, classifier_name, model, X_test, y_test):
-        # ROC-кривая
+        # Построение ROC-кривой
         y_pred_proba = model.predict_proba(X_test)[:, 1]
-        fpr, tpr, thresholds = roc_curve(y_test, y_pred_proba)
+        fpr, tpr, _ = roc_curve(y_test, y_pred_proba)
         roc_auc = auc(fpr, tpr)
 
         plt.figure()
-        plt.plot(fpr, tpr, label=f'ROC curve (area = {roc_auc:.2f}) ')
+        plt.plot(fpr, tpr, label=f'ROC curve (area = {roc_auc:.2f})')
         plt.plot([0, 1], [0, 1], linestyle='--', color='gray')
-        plt.xlim([0.0, 1.0])
-        plt.ylim([0.0, 1.05])
         plt.xlabel('False Positive Rate')
         plt.ylabel('True Positive Rate')
         plt.title(f'ROC Curve для {classifier_name} {self.y_col}')
-        plt.legend(loc='lower right')
         plt.grid(True)
+        plt.legend()
         plt.savefig(f'pic_ROC_Curve_for_{classifier_name}_{self.y_col}')
-        # plt.show()
 
     def get_most_important_features(self, model, feature_names, top_n):
-        # Важность признаков
+        # Получение и визуализация важнейших признаков модели
         importances = model.feature_importances_
         feature_importances = pd.Series(importances, index=feature_names).sort_values(ascending=False)
-
-        # Визуализация топ-30 признаков
         feature_importances.head(top_n).plot(kind='barh', figsize=(8, 10))
         plt.title('Top 30 Feature Importances (RandomForest)')
         plt.gca().invert_yaxis()
-        # plt.show()
-
-        # Отбор лучших признаков
         return feature_importances.head(top_n).index.tolist()
 
-    def visualize_clusters_with_tnse(self, classifier_name, X_test_selected, y_pred_selected, max_outliers_per_row=3):
-        """
-        Визуализация кластеров через t-SNE:
-        - мягкая фильтрация выбросов (robust z-score)
-        - настраиваемый порог max_outliers_per_row
-        - безопасный подбор perplexity
-        - подписи и сохранение графика
-        """
-        # === 1. Robust Z-score фильтрация выбросов
-        Q1 = np.percentile(X_test_selected, 25, axis=0)
-        Q3 = np.percentile(X_test_selected, 75, axis=0)
-        IQR = Q3 - Q1 + 1e-8  # защитим от деления на 0
+    def visualize_tsne_3d(self, classifier_name, X_test, y_pred):
+        # 3D t-SNE визуализация
+        tsne = TSNE(n_components=3, perplexity=30, random_state=42, n_iter=1000)
+        X_vis = tsne.fit_transform(X_test)
 
-        z_robust = np.abs((X_test_selected - Q1) / IQR)
-        row_outlier_counts = (z_robust >= 3).sum(axis=1)
-        mask = row_outlier_counts <= max_outliers_per_row
+        fig = plt.figure(figsize=(10, 8))
+        ax = fig.add_subplot(111, projection='3d')
+        palette = {0: "#1f77b4", 1: "#d62728"}
 
-        X_test_clean = X_test_selected[mask]
-        y_pred_clean = y_pred_selected[mask]
-        n_samples = X_test_clean.shape[0]
+        for class_label in np.unique(y_pred):
+            idx = (y_pred == class_label)
+            ax.scatter(X_vis[idx, 0], X_vis[idx, 1], X_vis[idx, 2],
+                       label=f"Класс {class_label}", color=palette[class_label],
+                       alpha=0.7, edgecolors='k')
 
-        print(f"[t-SNE] Оставлено объектов после фильтрации: {n_samples}")
+        ax.set_title(f"3D t-SNE визуализация ({classifier_name})")
+        ax.set_xlabel("t-SNE 1")
+        ax.set_ylabel("t-SNE 2")
+        ax.set_zlabel("t-SNE 3")
+        ax.legend()
+        plt.tight_layout()
+        plt.savefig(f"pic_tsne3d_classification_{classifier_name}_{self.y_col}.png")
 
-        # === 2. Проверка: достаточно ли объектов
-        if n_samples < 5:
-            print(f"[!] t-SNE пропущен: после фильтрации осталось только {n_samples} объектов.")
-            return
+    def visualize_clusters_with_tsne(self, classifier_name, X_test, y_pred):
+        # 2D t-SNE визуализация
+        tsne = TSNE(n_components=2, perplexity=30, random_state=42, n_iter=1000)
+        X_vis = tsne.fit_transform(X_test)
 
-        # === 3. Безопасный подбор perplexity
-        perplexity = min(30, max(5, n_samples // 3))
-
-        # === 4. t-SNE
-        tsne = TSNE(n_components=2, perplexity=perplexity, random_state=42, n_iter=1000)
-        X_test_tsne = tsne.fit_transform(X_test_clean)
-
-        # === 5. Визуализация
         plt.figure(figsize=(8, 6))
-        scatter = plt.scatter(X_test_tsne[:, 0], X_test_tsne[:, 1], c=y_pred_clean,
-                              cmap='coolwarm', alpha=0.7, edgecolors='k')
-        plt.xlabel('t-SNE 1')
-        plt.ylabel('t-SNE 2')
-        plt.title(f'Кластеры после классификации ({classifier_name}, y = {self.y_col})')
-        plt.grid(True)
-        plt.legend(*scatter.legend_elements(), title="Классы")
-
-        # подпись параметров
-        plt.text(0.99, 0.01, f'n={n_samples}, perplexity={perplexity}',
-                 ha='right', va='bottom', transform=plt.gca().transAxes,
-                 fontsize=8, bbox=dict(facecolor='white', edgecolor='gray'))
-
+        palette = {0: "#1f77b4", 1: "#d62728"}
+        sns.scatterplot(x=X_vis[:, 0], y=X_vis[:, 1], hue=y_pred,
+                        palette=palette, edgecolor='black', alpha=0.8, s=70)
+        plt.title(f"Визуализация классов ({classifier_name})")
+        plt.xlabel("t-SNE 1")
+        plt.ylabel("t-SNE 2")
+        plt.legend(title="Классы")
         plt.tight_layout()
         plt.savefig(f"pic_classification_{classifier_name}_{self.y_col}.png")
-        # plt.show()  # включи при отладке
-        print(f"[t-SNE] Сохранено: pic_classification_{classifier_name}_{self.y_col}.png")
 
-        # plt.show()
-
-    # Проверка баланса классов
     def show_class_balance(self, data):
+        # Вывод баланса классов
         class_counts = data['target'].value_counts()
         print(f'classes count: {class_counts}')
 
+    def visualize_classification_diagnostics(self, classifier_name, model, X_test, y_test, y_pred):
+        # Визуализация общей диагностики классификатора
+        y_proba = model.predict_proba(X_test)[:, 1]
+        tsne_2d = TSNE(n_components=2, perplexity=30, n_iter=1000, random_state=42).fit_transform(X_test)
+        tsne_3d = TSNE(n_components=3, perplexity=30, n_iter=1000, random_state=42).fit_transform(X_test)
+
+        precision, recall, _ = precision_recall_curve(y_test, y_proba)
+        avg_prec = average_precision_score(y_test, y_proba)
+        fpr, tpr, _ = roc_curve(y_test, y_proba)
+        roc_auc = auc(fpr, tpr)
+
+        fig = plt.figure(figsize=(18, 12))
+        fig.suptitle(f"Диагностика классификатора: {classifier_name} для {self.y_col}", fontsize=16)
+        palette = {0: "#1f77b4", 1: "#d62728"}
+
+        ax1 = fig.add_subplot(2, 2, 1)
+        sns.scatterplot(x=tsne_2d[:, 0], y=tsne_2d[:, 1], hue=y_pred, palette=palette, ax=ax1,
+                        edgecolor='k', alpha=0.7, s=60)
+        ax1.set_title("t-SNE (2D)")
+
+        ax2 = fig.add_subplot(2, 2, 2, projection='3d')
+        for class_label in np.unique(y_pred):
+            idx = y_pred == class_label
+            ax2.scatter(tsne_3d[idx, 0], tsne_3d[idx, 1], tsne_3d[idx, 2],
+                        label=f"Класс {class_label}", color=palette[class_label],
+                        alpha=0.6, edgecolors='k')
+        ax2.set_title("t-SNE (3D)")
+
+        ax3 = fig.add_subplot(2, 2, 3)
+        ax3.plot(recall, precision, label=f'AP = {avg_prec:.2f}')
+        ax3.set_title("Precision-Recall Curve")
+        ax3.grid(True)
+
+        ax4 = fig.add_subplot(2, 2, 4)
+        ax4.plot(fpr, tpr, label=f'AUC = {roc_auc:.2f}')
+        ax4.plot([0, 1], [0, 1], 'k--')
+        ax4.set_title("ROC Curve")
+        ax4.grid(True)
+
+        plt.tight_layout(rect=[0, 0, 1, 0.95])
+        filename = f"pic_classification_diagnostics_{classifier_name}_{self.y_col}.png"
+        plt.savefig(filename)
+        plt.close()
+        print(f"[diagnostics] Сохранено: {filename}")
+
     def run(self):
-        # Загрузка данных
+        # Основной метод запуска классификации
+
+        # Загрузка исходных данных из CSV-файла и базовая предобработка
         data: DataFrame = self.load_data()
-        # Предобработка данных
+
+        # Применение пользовательской функции предобработки (например, удаление ненужных признаков, нормализация и т.д.)
         data = self.data_preprocessing_fun(data)
+
+        # Удаление строк с пропущенными значениями
+        data = data.dropna()
+
+        # Создание целевой переменной 'target' на основе пороговой функции
+        # Например, если split_criterion_func = get_median_for_col, то все значения выше медианы -> класс 1, иначе -> класс 0
         data['target'] = np.where(data[self.y_col] > self.split_criterion_func(data, self.y_col), 1, 0)
+
+        # Вывод в консоль баланса классов в целевой переменной
         self.show_class_balance(data)
-        # Разделим данные на обучающую и тестовую выборки
+
+        # Разделение данных на обучающую и тестовую выборки
         columns, X_train, X_test, y_train, y_test = self.train_test_split_for_clusterization(data, 0.3)
 
-        # GridSearchCV
+        #  Подбор гиперпараметров с помощью GridSearchCV
+        # Проводится перекрёстная проверка (cv=5) с метрикой качества 'accuracy'
         grid = GridSearchCV(self.pipeline, self.param_grid, cv=5, scoring='accuracy', n_jobs=-1)
         grid.fit(X_train, y_train)
 
-        # Оценка модели
+        # Получение имени обученного классификатора (например, RandomForestClassifier)
         classifier_name = type(self.pipeline.named_steps['clf']).__name__
+
+        # Вывод наилучших найденных параметров модели
         print(f"Лучшие параметры для: {classifier_name}")
         print(grid.best_params_)
+
+        # Предсказание классов на тестовой выборке
         y_pred = grid.predict(X_test)
+
+        # Вывод отчёта по классификации (precision, recall, f1-score, support)
         print(f"Отчёт по классификации модели {classifier_name}:")
         print(classification_report(y_test, y_pred))
+
+        # Извлечение обученной модели с лучшими параметрами
         model = grid.best_estimator_
 
-        # Матрица ошибок
-        self.visualize_confusion_matrix(classifier_name, model, X_test, y_test)
-        # ROC-кривая
-        self.visualize_roc_curve(classifier_name, model, X_test, y_test)
-        # Визуализация кластеров через t-SNE
-        self.visualize_clusters_with_tnse(classifier_name, X_test, y_pred)
-        # Визуализация Precision-Recall кривой
-        self.visualize_pr_curve(classifier_name, model, X_test, y_test)
-
-        # # Важность признаков. Отбор лучших признаков
-        # selected_features = self.get_most_important_features(model, columns, 30)
-        # # Пересборка выборок
-        # X_train_selected = pd.DataFrame(X_train, columns=columns)[selected_features].values
-        # X_test_selected = pd.DataFrame(X_test, columns=columns)[selected_features].values
-        # # Переобучение модели на лучших признаках
-        #
-        # # model, y_pred_selected = self.model_processing_fun(X_train_selected, X_test_selected, y_train, y_test)
-        # # GridSearchCV
-        # grid = GridSearchCV(self.pipeline, self.param_grid, cv=5, scoring='accuracy', n_jobs=-1)
-        # grid.fit(X_train_selected, y_train)
-        #
-        # # Оценка модели
-        # classifier_name = type(self.pipeline.named_steps['clf']).__name__
-        # print(f"Лучшие параметры для: {classifier_name}")
-        # print(grid.best_params_)
-        # y_pred = grid.predict(X_test)
-        # print(f"Отчёт по классификации модели {classifier_name}:", classification_report(y_test, y_pred))
-        # model = grid.best_estimator_
-        #
-        # # Матрица ошибок
-        # self.visualize_confusion_matrix(model, X_test_selected, y_test)
-        # # ROC-кривая
-        # self.visualize_roc_curve(model, X_test_selected, y_test)
-        # # Визуализация кластеров через t-SNE
-        # self.visualize_clusters_with_tnse(X_test_selected, y_pred)
+        # Построение диагностик классификации — ROC, PR-кривые, t-SNE и т.д.
+        self.visualize_classification_diagnostics(classifier_name, model, X_test, y_test, y_pred)
 
 
+# Функция для получения медианного значения признака (используется как порог для бинарной классификации)
 def get_median_for_col(data, column):
     return data[column].median()
 
-
+# Функция-заглушка, возвращающая фиксированное значение 8 (используется для задач, где порог установлен вручную, например, SI > 8)
 def get_8(data, column):
     return 8
 
-
+# Определяем структуру TaskHolder с полями:
+# y_col — имя целевой переменной,
+# preprocessor — функция предобработки данных,
+# models — список моделей и параметров (ModelHolder),
+# split_criterion_func — функция определения порога для бинарной классификации
 TaskHolder = namedtuple('TaskHolder', ['y_col', 'preprocessor', 'models', 'split_criterion_func'])
 
+# Список задач классификации:
+# Для каждой целевой переменной задаётся своя функция предобработки, модели и функция разделения на классы
 classification_tasks = [
-    TaskHolder('CC50', preprocess_cc50_classification, classification_models, get_median_for_col),
-    TaskHolder('IC50', preprocess_ic50_classification, classification_models, get_median_for_col),
-    TaskHolder('SI', preprocess_si_median_classification, classification_models, get_median_for_col),
-    TaskHolder('SI', preprocess_si_gt8_classification, classification_models, get_8),
+    TaskHolder('CC50', preprocess_cc50_classification, classification_models, get_median_for_col),  # разделение по медиане
+    TaskHolder('IC50', preprocess_ic50_classification, classification_models, get_median_for_col),  # разделение по медиане
+    TaskHolder('SI', preprocess_si_median_classification, classification_models, get_median_for_col),  # разделение по медиане
+    TaskHolder('SI', preprocess_si_gt8_classification, classification_models, get_8),  # разделение по порогу SI > 8
 ]
 
+# Список задач регрессии:
+# Порог разделения не используется (None), так как задача — предсказание непрерывной переменной
 regression_tasks = [
     TaskHolder('CC50', preprocess_cc50_regression, regression_models, None),
     TaskHolder('IC50', preprocess_ic50_regression, regression_models, None),
     TaskHolder('SI', preprocess_si_regression, regression_models, None),
 ]
+
