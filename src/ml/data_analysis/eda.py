@@ -22,7 +22,7 @@ def visualise_distribution(df, column):
     plt.title(f"Распределение {column}")
     plt.xlabel(column)
     plt.ylabel("Количество")
-    plt.savefig(f'distribution_{column}')
+    plt.savefig(f'./out/distribution_{column}')
 
 
 def visualise_distributions(df, columns):
@@ -46,14 +46,14 @@ def visualise_distributions(df, columns):
             ax.set_visible(False)
 
     plt.tight_layout()
-    plt.savefig(f"distributions_{'_'.join(columns)}")
+    plt.savefig(f"./out/distributions_{'_'.join(columns)}")
 
 
 def visualise_box_plot(df, column):
     plt.figure()
     sns.boxplot(x=df[column])
     plt.title(f"Boxplot для {column}")
-    plt.savefig(f"boxplot_{column}")
+    plt.savefig(f"./out/boxplot_{column}")
 
 
 def visualise_box_plots(df, columns):
@@ -108,7 +108,7 @@ def visualise_box_plots(df, columns):
             ax.set_visible(False)
 
     plt.tight_layout(pad=2.0)
-    plt.savefig(f'boxplots_{'_'.join(columns)}')
+    plt.savefig(f'./out/boxplots_{'_'.join(columns)}')
 
 
 def visualise_top_correlated_features(corr_matrix, target, target_cols, n):
@@ -118,7 +118,7 @@ def visualise_top_correlated_features(corr_matrix, target, target_cols, n):
     plt.title(f"Топ 10 признаков по корреляции с {target}")
     plt.xlabel("Абсолютная корреляция")
     plt.ylabel("Признак")
-    plt.savefig(f'top_10_correlated_with{target}')
+    plt.savefig(f'./out/top_10_correlated_with{target}')
 
 
 def visualise_class_balance(df, column):
@@ -126,7 +126,7 @@ def visualise_class_balance(df, column):
     plt.title(f"Распределение классов для {column}")
     plt.xlabel("Класс")
     plt.ylabel("Количество")
-    plt.savefig(f'class_balance_{target}')
+    plt.savefig(f'./out/class_balance_{target}')
 
 
 def visualise_class_balances(df, columns):
@@ -151,7 +151,7 @@ def visualise_class_balances(df, columns):
         fig.delaxes(axes[j])
 
     plt.tight_layout()
-    plt.savefig(f'class_balances_{"_".join(columns).replace(">","_greater_")}')
+    plt.savefig(f'./out/class_balances_{"_".join(columns).replace(">","_greater_")}')
 
 
 def visualise_corr_mx(df, columns=None):
@@ -161,7 +161,7 @@ def visualise_corr_mx(df, columns=None):
     else:
         sns.heatmap(df[target_cols].corr(), annot=True, cmap='coolwarm')
     plt.title("Матрица корреляций")
-    plt.savefig(f'corr_mx{"_".join(columns)}')
+    plt.savefig(f'./out/corr_mx{"_".join(columns)}')
 
 
 # Загрузка данных
@@ -346,7 +346,7 @@ fr_* — набор бинарных и количественных дескр�
 print('\nДля большей наглядности сведём полученную информацию в таблицу.')
 feature_applicability_df = pd.read_csv('../data/feature_applicability.csv')
 print(feature_applicability_df)
-feature_applicability_df.to_csv("applicability.csv")
+feature_applicability_df.to_csv("./out/applicability.csv")
 print(tabulate(feature_applicability_df, headers='keys', tablefmt='fancy_grid'))
 
 print('''\nВывод: все признаки полезны для решения всех задач. 
@@ -355,7 +355,7 @@ print('''\nВывод: все признаки полезны для решен�
 
 print("\nОписательная статистика признаков:")
 print(df.describe().T)
-df.describe().T.to_csv("stats.csv")
+df.describe().T.to_csv("./out/stats.csv")
 print('''\nВыводы:
 1. Биологические переменные (IC50, CC50, SI)
 1.1. IC50: сильная положительная асимметрия, медиана около 47, максимум > 4000
@@ -459,7 +459,7 @@ print("\nВизуализируем корреляцию между целевы
 plt.figure()
 sns.heatmap(df[target_cols].corr(), annot=True, cmap='coolwarm')
 plt.title("Корреляции между IC50, CC50 и SI и логарифмированными версиями")
-plt.savefig(f'corr_mx_{"_".join(target_cols)}')
+plt.savefig(f'./out/corr_mx_{"_".join(target_cols)}')
 
 print('''\nВизуализировать корреляцию между всеми признаками, в том числе созданными на их основе не будем. 
 Признаков много, график получится нечитабельный.''')

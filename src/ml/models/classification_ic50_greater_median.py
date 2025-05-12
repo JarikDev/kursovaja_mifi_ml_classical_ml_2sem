@@ -37,5 +37,4 @@ for model in tqdm(classification_models):
                             data_preprocessing_fun=preprocess_ic50_classification,
                             param_grid=model.param_grid,
                             pipeline=pipeline,
-                            split_criterion_func=
-                            lambda data, column: data[column].median()).run()
+                            split_criterion_func=lambda data, column: data[column].median()).run()

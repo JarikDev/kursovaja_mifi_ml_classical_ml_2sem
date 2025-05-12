@@ -103,7 +103,6 @@ classification_models = [
         'clf__learning_rate': [0.01, 0.1],
         'clf__max_depth': [3, 5]
     }),
-    # SVC закомментирован, так как слишком медленный для больших выборок
 ]
 
 # Интерфейс для всех обработчиков (регрессия, классификация)
@@ -205,7 +204,7 @@ class RegressionProcessor(ProcessorInterface):
         axes[2].grid(True)
 
         plt.tight_layout(rect=[0, 0, 1, 0.95])
-        filename = f'diagnostics_{regressor_name}_{self.y_col}.png'
+        filename = f'./out/diagnostics_{regressor_name}_{self.y_col}.png'
         plt.savefig(filename)
         plt.close()
 
@@ -218,7 +217,7 @@ class RegressionProcessor(ProcessorInterface):
         plt.xlabel('Остатки')
         plt.grid(True)
         plt.tight_layout()
-        plt.savefig(f'pic_{regressor_name}_{self.y_col}_residual_distribution.png')
+        plt.savefig(f'./out/pic_{regressor_name}_{self.y_col}_residual_distribution.png')
 
     def plot_residuals(self, regressor_name, y_test, y_pred):
         # Остатки по предсказанным значениям
@@ -231,7 +230,7 @@ class RegressionProcessor(ProcessorInterface):
         plt.title(f'График остатков модели регрессии: {regressor_name} для {self.y_col}')
         plt.grid(True)
         plt.tight_layout()
-        plt.savefig(f'pic_{regressor_name}_{self.y_col}_residuals.png')
+        plt.savefig(f'./out/pic_{regressor_name}_{self.y_col}_residuals.png')
 
     def plot_predictions_vs_actual_values(self, regressor_name, y_test, y_pred):
         # Факт против предсказания
@@ -243,7 +242,7 @@ class RegressionProcessor(ProcessorInterface):
         plt.title(f'Факт vs Предсказание модели регрессии: {regressor_name} для {self.y_col}')
         plt.grid(True)
         plt.tight_layout()
-        plt.savefig(f"pic_{regressor_name}_{self.y_col}_regression.png")
+        plt.savefig(f"./out/pic_{regressor_name}_{self.y_col}_regression.png")
 
 
 
@@ -283,7 +282,7 @@ class ClassificationProcessor(ProcessorInterface):
         # Построение матрицы ошибок
         ConfusionMatrixDisplay.from_estimator(model, X_test, y_test, cmap='Blues')
         plt.title(f'Confusion Matrix для {classifier_name} {self.y_col}')
-        plt.savefig(f'pic_Confusion_Matrix_for_{classifier_name}_{self.y_col}')
+        plt.savefig(f'./out/pic_Confusion_Matrix_for_{classifier_name}_{self.y_col}')
 
     def visualize_pr_curve(self, classifier_name, model, X_test, y_test):
         # Построение PR-кривой
@@ -315,7 +314,7 @@ class ClassificationProcessor(ProcessorInterface):
         plt.title(f'ROC Curve для {classifier_name} {self.y_col}')
         plt.grid(True)
         plt.legend()
-        plt.savefig(f'pic_ROC_Curve_for_{classifier_name}_{self.y_col}')
+        plt.savefig(f'./out/pic_ROC_Curve_for_{classifier_name}_{self.y_col}')
 
     def get_most_important_features(self, model, feature_names, top_n):
         # Получение и визуализация важнейших признаков модели
@@ -410,7 +409,7 @@ class ClassificationProcessor(ProcessorInterface):
         ax4.grid(True)
 
         plt.tight_layout(rect=[0, 0, 1, 0.95])
-        filename = f"pic_classification_diagnostics_{classifier_name}_{self.y_col}.png"
+        filename = f"./out/pic_classification_diagnostics_{classifier_name}_{self.y_col}.png"
         plt.savefig(filename)
         plt.close()
         print(f"[diagnostics] Сохранено: {filename}")

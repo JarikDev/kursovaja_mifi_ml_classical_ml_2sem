@@ -37,4 +37,4 @@ for model in tqdm(classification_models):
                             data_preprocessing_fun=preprocess_si_gt8_classification,
                             param_grid=model.param_grid,
                             pipeline=pipeline,
-                            split_criterion_func=  lambda x, y: 8).run()
+                            split_criterion_func=lambda x, y: 8).run()
