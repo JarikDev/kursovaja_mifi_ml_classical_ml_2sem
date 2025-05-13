@@ -18,7 +18,7 @@ warnings.filterwarnings("ignore", category=ConvergenceWarning)  # sklearn warnin
 
 y_col = 'CC50'
 
-# Запускаем обработку всех моделей для решения задачи классификации
+# Запускаем обработку всех моделей для решения задачи классификации CC50 выше медианы.
 for model in tqdm(classification_models):
     # Строим пайплайн
     pipeline = Pipeline([

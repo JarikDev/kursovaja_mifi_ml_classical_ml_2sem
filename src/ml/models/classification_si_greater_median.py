@@ -18,7 +18,7 @@ warnings.filterwarnings("ignore", category=ConvergenceWarning)  # sklearn warnin
 
 y_col = 'SI'
 
-# Запускаем обработку всех моделей для решения задачи классификации
+# Запускаем обработку всех моделей для решения задачи классификации SI выше медианы.
 for model in tqdm(classification_models):
     # Строим пайплайн
     pipeline = Pipeline([

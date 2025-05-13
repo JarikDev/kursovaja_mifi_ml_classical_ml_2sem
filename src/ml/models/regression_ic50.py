@@ -18,7 +18,7 @@ warnings.filterwarnings("ignore", category=ConvergenceWarning)  # sklearn warnin
 
 y_col = 'IC50'
 
-# Запускаем обработку всех моделей для решения задачи регрессии
+# Запускаем обработку всех моделей для решения задачи регрессии IC50.
 for model in tqdm(regression_models):
     # Строим пайплайн
     pipeline = Pipeline([
