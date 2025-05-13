@@ -41,7 +41,7 @@ def run_regression():
             regressor_name = type(pipeline.named_steps['regressor']).__name__  # Получаем имя модели
             print(f'\nЗапускаем регрессию для: {task.y_col}, модель: {regressor_name}\n')
             # Запуск процесса регрессии для текущей модели и задачи
-            RegressionProcessor(data_path="../data/kursovik_data.csv",
+            RegressionProcessor(data_path=data_path,
                                 y_col=task.y_col,
                                 data_preprocessing_fun=task.preprocessor,
                                 param_grid=model.param_grid,
@@ -68,7 +68,7 @@ def run_classification():
             classifier_name = type(pipeline.named_steps['clf']).__name__  # Получаем имя модели
             print(f'\nЗапускаем классификацию для: {task.y_col}, модель: {classifier_name}\n')
             # Запуск процесса классификации для текущей модели и задачи
-            ClassificationProcessor(data_path="../data/kursovik_data.csv",
+            ClassificationProcessor(data_path=data_path,
                                     y_col=task.y_col,
                                     data_preprocessing_fun=task.preprocessor,
                                     param_grid=model.param_grid,
@@ -80,7 +80,7 @@ def run_app():
     """
     Основная функция приложения, которая предлагает пользователю выбрать режим работы: регрессия, классификация или всё.
     """
-    print('Что делаем ? 1 - регрессию, 2 - кластеризацию, 3 - всё.')  # Выводим меню
+    print('Какая задача? 1 - регрессия, 2 - кластеризация, 3 - все.')  # Выводим меню
     mode = input()  # Получаем выбор пользователя
     match mode:
         case '1':
@@ -95,4 +95,5 @@ def run_app():
 
 
 # Запуск приложения
-run_app()
+if __name__ == "__main__":
+    run_app()
