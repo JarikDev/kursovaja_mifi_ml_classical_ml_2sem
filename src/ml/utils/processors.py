@@ -457,7 +457,8 @@ class ClassificationProcessor(ProcessorInterface):
 
         # Извлечение обученной модели с лучшими параметрами
         model = grid.best_estimator_
-
+        # Визуализация матрицы ошибок
+        self.visualize_confusion_matrix(classifier_name, model, X_test, y_test)
         # Построение диагностик классификации — ROC, PR-кривые, t-SNE и т.д.
         self.visualize_classification_diagnostics(classifier_name, model, X_test, y_test, y_pred)
 
